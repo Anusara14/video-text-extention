@@ -13,7 +13,7 @@ async function createOffscreenDocument() {
   console.log('Creating offscreen document...');
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_DOCUMENT_PATH,
-    reasons: ['WORKER'],
+    reasons: ['WORKERS'], // FIX: Changed 'WORKER' to 'WORKERS'
     justification: 'To run Tesseract.js OCR worker',
   });
 }
@@ -46,4 +46,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 });
+
 
