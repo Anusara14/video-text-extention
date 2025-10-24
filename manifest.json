@@ -12,8 +12,18 @@
     "*://*.youtube.com/*",
     "https://api.ocr.space/*"
   ],
+  "icons": {
+    "16": "logo/video-text.png",
+    "48": "logo/video-text.png",
+    "128": "logo/video-text.png"
+  },
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "logo/video-text.png",
+      "48": "logo/video-text.png",
+      "128": "logo/video-text.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
