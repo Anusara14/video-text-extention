@@ -13,17 +13,24 @@ async function initializeWorker() {
   
   try {
     // Get paths to locally bundled files using chrome.runtime.getURL()
-    const workerPath = chrome.runtime.getURL('lib/worker.min.js');
     const corePath = chrome.runtime.getURL('lib/tesseract-core.wasm.js');
     const langPath = chrome.runtime.getURL('lib/');
+    const workerPath = chrome.runtime.getURL('lib/worker.min.js');
 
-    console.log('Worker paths:', { workerPath, corePath, langPath });
+    console.log('Paths:', { corePath, langPath, workerPath });
     
-    // *** CRITICAL FIX ***
-    // In Tesseract.js v5.x, createWorker() returns a PROMISE, not the worker object.
-    // We must AWAIT it to get the actual worker instance.
+    // Fetch the worker script and convert to data URL
+    // This is the ONLY way that works in Chrome extensions
+    const workerResponse = await fetch(workerPath);
+    const workerBlob = await workerResponse.blob();
+    const workerCode = await workerBlob.text();
+    const workerDataURL = `data:text/javascript;base64,${btoa(workerCode)}`;
+    
+    console.log('Created worker data URL (length:', workerCode.length, 'bytes)');
+    
+    // Use the data URL for the worker
     worker = await Tesseract.createWorker('eng', 1, {
-      workerPath: workerPath,
+      workerPath: workerDataURL,
       corePath: corePath,
       langPath: langPath,
       logger: m => {

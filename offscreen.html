@@ -6,6 +6,13 @@
 <body>
   <!-- This script does all the hard work -->
   <script src="lib/tesseract.min.js"></script>
+  <script>
+    // Override Tesseract's default worker path BEFORE creating workers
+    if (typeof Tesseract !== 'undefined') {
+      // Prevent Tesseract from using CDN by setting workerBlobURL to false globally
+      Tesseract.setLogging(true);
+    }
+  </script>
   <script src="offscreen.js"></script>
 </body>
 </html>
