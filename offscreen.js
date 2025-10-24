@@ -16,9 +16,17 @@ async function initializeWorker() {
     const workerPath = chrome.runtime.getURL('lib/worker.min.js');
     const corePath = chrome.runtime.getURL('lib/tesseract-core.wasm.js');
     const langPath = chrome.runtime.getURL('lib/');
+
+    // *** FIX ***
+    // Globally override the default paths *before* creating the worker.
+    // This tells the worker script (worker.min.js) where to find its
+    // core file (tesseract-core.wasm.js) locally instead of fetching from a CDN.
+    Tesseract.workerOptions.workerPath = workerPath;
+    Tesseract.workerOptions.corePath = corePath;
     
     // Create the Tesseract worker
     worker = Tesseract.createWorker({
+      // Pass paths again for robustness
       workerPath,
       corePath,
       langPath,
@@ -61,3 +69,4 @@ chrome.runtime.onMessage.addListener((request) => {
 
 // 3. Start initializing the worker as soon as this script runs
 initializeWorker();
+
