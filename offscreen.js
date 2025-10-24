@@ -5,65 +5,46 @@ function sendMessage(type, payload) {
 
 let worker = null;
 
-// 1. Initialize worker
+// 1. Initialize worker with Tesseract.js v4 API
 async function initializeWorker() {
   sendMessage('ocr_progress', { status: 'Loading OCR model...' });
   
   try {
     // Get paths to locally bundled files using chrome.runtime.getURL()
+    const workerPath = chrome.runtime.getURL('lib/worker.min.js');
     const corePath = chrome.runtime.getURL('lib/tesseract-core.wasm.js');
     const langPath = chrome.runtime.getURL('lib/');
-    const workerPath = chrome.runtime.getURL('lib/worker.min.js');
 
-    console.log('Initializing Tesseract with paths:', { corePath, langPath, workerPath });
+    console.log('Initializing Tesseract v4 with paths:', { workerPath, corePath, langPath });
     
-    // Try to create worker with blob URL
-    try {
-      // Fetch the worker script content
-      const workerResponse = await fetch(workerPath);
-      const workerText = await workerResponse.text();
-      
-      // Create a Blob from the worker code
-      const workerBlob = new Blob([workerText], { type: 'application/javascript' });
-      const workerBlobURL = URL.createObjectURL(workerBlob);
-      
-      console.log('Worker Blob URL created:', workerBlobURL);
-      
-      // Create worker with blob URL (this works in offscreen documents!)
-      worker = await Tesseract.createWorker('eng', 1, {
-        workerPath: workerBlobURL,
-        corePath: corePath,
-        langPath: langPath,
-        gzip: false,  // Using uncompressed .traineddata file
-        logger: m => {
-          console.log('Tesseract:', m);
-          if (m.status) {
-            sendMessage('ocr_progress', m);
-          }
+    // Tesseract.js v4 API - create worker
+    worker = Tesseract.createWorker({
+      workerPath: workerPath,
+      corePath: corePath,
+      langPath: langPath,
+      logger: m => {
+        console.log('Tesseract:', m);
+        if (m.status) {
+          sendMessage('ocr_progress', m);
         }
-      });
-    } catch (workerError) {
-      console.error('Blob worker creation failed, trying without workerPath:', workerError);
-      
-      // Fallback: Try without specifying workerPath (uses inline code)
-      worker = await Tesseract.createWorker('eng', 1, {
-        corePath: corePath,
-        langPath: langPath,
-        gzip: false,
-        logger: m => {
-          console.log('Tesseract:', m);
-          if (m.status) {
-            sendMessage('ocr_progress', m);
-          }
-        }
-      });
-    }
+      }
+    });
+    
+    // Initialize the worker (v4 requires these steps)
+    console.log('Loading worker...');
+    await worker.load();
+    
+    console.log('Loading language...');
+    await worker.loadLanguage('eng');
+    
+    console.log('Initializing API...');
+    await worker.initialize('eng');
     
     console.log('Tesseract Worker Initialized Successfully!');
     sendMessage('ocr_progress', { status: 'Ready to capture' });
   } catch (e) {
     console.error('Error initializing Tesseract worker:', e);
-    console.error('Error stack:', e.stack);
+    console.error('Error details:', e.message, e.stack);
     sendMessage('ocr_error', 'Failed to initialize: ' + e.message);
   }
 }
@@ -80,10 +61,12 @@ chrome.runtime.onMessage.addListener((request) => {
     // Start the recognition process
     (async () => {
       try {
-        console.log('Starting OCR recognition with image data...');
+        console.log('Starting OCR recognition...');
         console.log('Image data type:', typeof request.payload);
-        console.log('Image data:', request.payload);
         
+        sendMessage('ocr_progress', { status: 'Recognizing text...' });
+        
+        // Tesseract.js v4 API - recognize returns result directly
         const result = await worker.recognize(request.payload);
         
         console.log('OCR completed successfully!');
@@ -94,7 +77,7 @@ chrome.runtime.onMessage.addListener((request) => {
         sendMessage('ocr_result', { text: result.data.text });
       } catch (e) {
         console.error('Error during OCR recognition:', e);
-        console.error('Error stack:', e.stack);
+        console.error('Error details:', e.message);
         sendMessage('ocr_error', 'OCR failed: ' + e.message);
       }
     })();
@@ -102,6 +85,6 @@ chrome.runtime.onMessage.addListener((request) => {
 });
 
 // 3. Start initializing as soon as this script runs
-console.log('Offscreen document loaded, initializing Tesseract...');
+console.log('Offscreen document loaded, initializing Tesseract v4...');
 initializeWorker();
 
