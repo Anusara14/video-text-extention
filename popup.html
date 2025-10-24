@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video OCR</title>
+  <style>
+    body {
+      width: 250px;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 10px;
+    }
+    button {
+      width: 90%;
+      padding: 10px;
+      background-color: #0a84ff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #0060df;
+    }
+    #status {
+      margin-top: 15px;
+      font-size: 13px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h3>Video Text OCR</h3>
+  <button id="ocrButton">Capture Frame</button>
+  <div id="status">Ready</div>
+  <script src="popup.js"></script>
+</body>
+</html>
