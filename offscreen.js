@@ -1,80 +1,84 @@
+// OCR.space API Key (Free: 25,000 requests/month)
+// Get your free API key from: https://ocr.space/ocrapi
+const OCR_API_KEY = 'K84427505588957'; // Free tier key - you can get your own at ocr.space/ocrapi
+
 // Helper function to send messages back to the background script
 function sendMessage(type, payload) {
   chrome.runtime.sendMessage({ type, payload });
 }
 
-let worker = null;
+// Initialize
+console.log('Offscreen document loaded, using OCR.space API');
+sendMessage('ocr_progress', { status: 'Ready to capture' });
 
-// 1. Initialize worker with Tesseract.js v4 API
-async function initializeWorker() {
-  sendMessage('ocr_progress', { status: 'Loading OCR model...' });
-  
-  try {
-    // Get paths to locally bundled files using chrome.runtime.getURL()
-    const workerPath = chrome.runtime.getURL('lib/worker.min.js');
-    const corePath = chrome.runtime.getURL('lib/tesseract-core.wasm.js');
-    const langPath = chrome.runtime.getURL('lib/');
-
-    console.log('Initializing Tesseract v4 with paths:', { workerPath, corePath, langPath });
-    
-    // Tesseract.js v4 API - create worker
-    worker = Tesseract.createWorker({
-      workerPath: workerPath,
-      corePath: corePath,
-      langPath: langPath,
-      logger: m => {
-        console.log('Tesseract:', m);
-        if (m.status) {
-          sendMessage('ocr_progress', m);
-        }
-      }
-    });
-    
-    // Initialize the worker (v4 requires these steps)
-    console.log('Loading worker...');
-    await worker.load();
-    
-    console.log('Loading language...');
-    await worker.loadLanguage('eng');
-    
-    console.log('Initializing API...');
-    await worker.initialize('eng');
-    
-    console.log('Tesseract Worker Initialized Successfully!');
-    sendMessage('ocr_progress', { status: 'Ready to capture' });
-  } catch (e) {
-    console.error('Error initializing Tesseract worker:', e);
-    console.error('Error details:', e.message, e.stack);
-    sendMessage('ocr_error', 'Failed to initialize: ' + e.message);
-  }
-}
-
-// 2. Listen for messages from the background script
+// Listen for messages from the background script
 chrome.runtime.onMessage.addListener((request) => {
   if (request.type === 'start_ocr') {
-    if (!worker) {
-      console.error('Worker not initialized');
-      sendMessage('ocr_error', 'Tesseract not ready. Try again.');
-      return;
-    }
+    console.log('Starting OCR with OCR.space API...');
+    console.log('Image data type:', typeof request.payload);
     
-    // Start the recognition process
+    sendMessage('ocr_progress', { status: 'Uploading image to OCR service...' });
+    
     (async () => {
       try {
-        console.log('Starting OCR recognition...');
-        console.log('Image data type:', typeof request.payload);
+        // OCR.space API expects base64 image without the data URL prefix
+        const base64Image = request.payload.includes(',') 
+          ? request.payload.split(',')[1] 
+          : request.payload;
         
-        sendMessage('ocr_progress', { status: 'Recognizing text...' });
+        console.log('Base64 image length:', base64Image.length);
         
-        // Tesseract.js v4 API - recognize returns result directly
-        const result = await worker.recognize(request.payload);
+        // Create form data for OCR.space API
+        const formData = new FormData();
+        formData.append('base64Image', 'data:image/png;base64,' + base64Image);
+        formData.append('language', 'eng');
+        formData.append('isOverlayRequired', 'false');
+        formData.append('detectOrientation', 'true');
+        formData.append('scale', 'true');
+        formData.append('OCREngine', '2'); // Engine 2 is more accurate
         
-        console.log('OCR completed successfully!');
-        console.log('Text length:', result.data.text.length);
-        console.log('Text preview:', result.data.text.substring(0, 100));
+        console.log('Sending request to OCR.space API...');
+        sendMessage('ocr_progress', { status: 'Processing image...' });
         
-        // Send the final text back
-        sendMessage('ocr_result', { text: result.data.text });
+        const response = await fetch('https://api.ocr.space/parse/image', {
+          method: 'POST',
+          headers: {
+            'apikey': OCR_API_KEY
+          },
+          body: formData
+        });
+        
+        console.log('Received response from OCR.space, status:', response.status);
+        
+        if (!response.ok) {
+          throw new Error(`OCR API request failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('OCR.space response:', data);
+        
+        // Check if OCR was successful
+        if (data.OCRExitCode !== 1) {
+          throw new Error(data.ErrorMessage || 'OCR processing failed');
+        }
+        
+        // Extract text from the response
+        const text = data.ParsedResults && data.ParsedResults[0] 
+          ? data.ParsedResults[0].ParsedText 
+          : '';
+        
+        if (!text || text.trim().length === 0) {
+          console.warn('No text detected in image');
+          sendMessage('ocr_result', { text: '(No text detected in image)' });
+        } else {
+          console.log('OCR completed successfully!');
+          console.log('Text length:', text.length);
+          console.log('Text preview:', text.substring(0, 100));
+          
+          // Send the final text back
+          sendMessage('ocr_result', { text: text });
+        }
+        
       } catch (e) {
         console.error('Error during OCR recognition:', e);
         console.error('Error details:', e.message);
@@ -83,8 +87,4 @@ chrome.runtime.onMessage.addListener((request) => {
     })();
   }
 });
-
-// 3. Start initializing as soon as this script runs
-console.log('Offscreen document loaded, initializing Tesseract v4...');
-initializeWorker();
 

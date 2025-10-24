@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "Fast Video OCR",
   "version": "1.0",
-  "description": "Uses Tesseract.js to OCR text from a YouTube video frame.",
+  "description": "Uses OCR.space API to extract text from YouTube video frames.",
   "permissions": [
     "scripting",
     "clipboardWrite",
     "offscreen"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*"
+    "*://*.youtube.com/*",
+    "https://api.ocr.space/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -18,15 +19,11 @@
     "service_worker": "background.js"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+    "extension_pages": "script-src 'self'; connect-src 'self' https://api.ocr.space; object-src 'self';"
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "lib/worker.min.js",
-        "lib/tesseract-core.wasm.js",
-        "lib/eng.traineddata.gz",
-        "lib/eng.traineddata",
         "offscreen.html"
       ],
       "matches": [
