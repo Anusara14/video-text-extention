@@ -1,82 +1,49 @@
-// 1. Import the Tesseract library
-// We can do this because we downloaded tesseract.min.js
-try {
-  importScripts('lib/tesseract.min.js');
-} catch (e) {
-  console.error('Failed to import Tesseract.js', e);
-}
+const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 
-let worker = null; // We will store our "warm" worker here
-
-// Helper function to send progress back to the popup
-function sendProgress(message) {
-  chrome.runtime.sendMessage({ ocr_progress: message });
-}
-
-// 2. The main initialization function
-async function initializeWorker() {
-  sendProgress({ status: 'Loading OCR model...' });
-  
-  // Get paths to the files we made "web accessible" in the manifest
-  const workerPath = chrome.runtime.getURL('lib/worker.min.js');
-  const corePath = chrome.runtime.getURL('lib/tesseract-core.wasm.js');
-  const langPath = chrome.runtime.getURL('lib/'); // Path to the *directory*
-  
-  try {
-    // Create the Tesseract worker
-    worker = Tesseract.createWorker({
-      workerPath,
-      corePath,
-      langPath,
-      logger: m => sendProgress(m), // Send progress updates to our logger
-    });
-    
-    // Load the worker
-    await worker.load();
-    // Load the English language model
-    await worker.loadLanguage('eng');
-    // Initialize the model for English
-    await worker.initialize('eng');
-    
-    console.log('Tesseract Worker Initialized.');
-    sendProgress({ status: 'Ready to capture' });
-  } catch (e) {
-    console.error('Error initializing Tesseract worker', e);
-    chrome.runtime.sendMessage({ ocr_error: 'Failed to load OCR model.' });
+// A helper to create the offscreen document
+async function createOffscreenDocument() {
+  const existingContexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT']
+  });
+  if (existingContexts.length > 0) {
+    console.log('Offscreen document already exists.');
+    return;
   }
+
+  console.log('Creating offscreen document...');
+  await chrome.offscreen.createDocument({
+    url: OFFSCREEN_DOCUMENT_PATH,
+    reasons: ['WORKER'],
+    justification: 'To run Tesseract.js OCR worker',
+  });
 }
 
-// 3. Listen for extension install/startup to initialize the worker
-chrome.runtime.onInstalled.addListener(() => {
-  initializeWorker();
-});
-chrome.runtime.onStartup.addListener(() => {
-  initializeWorker();
-});
+// 1. Create the offscreen document on extension startup
+chrome.runtime.onStartup.addListener(createOffscreenDocument);
+chrome.runtime.onInstalled.addListener(createOffscreenDocument);
 
-// 4. Listen for the message from content_script.js
+// 2. Listen for messages from content_script.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.image) {
-    // We received the pre-processed image data!
-    if (!worker) {
-      console.error('Worker not initialized.');
-      chrome.runtime.sendMessage({ ocr_error: 'Worker not ready. Try again.' });
-      return;
+    // Got the image from the content script.
+    // First, make sure the offscreen document is active.
+    createOffscreenDocument().then(() => {
+      // Now, forward the image data to the offscreen document
+      chrome.runtime.sendMessage({
+        type: 'start_ocr',
+        payload: request.image
+      });
+    });
+    return true; // Keep the message channel open
+  }
+  
+  // 3. Listen for messages from offscreen.js and forward them to popup.js
+  if (request.type) {
+    if (request.type === 'ocr_progress' || request.type === 'ocr_result' || request.type === 'ocr_error') {
+      // Forward these messages to the popup
+      chrome.runtime.sendMessage(request.payload)
+        .catch(e => console.log('Popup not open, skipping message.'));
     }
-
-    // Start the recognition process
-    (async () => {
-      try {
-        const { data: { text } } = await worker.recognize(request.image);
-        // Send the final text back to the popup
-        chrome.runtime.sendMessage({ ocr_result: { text } });
-      } catch (e) {
-        console.error('Error during recognition', e);
-        chrome.runtime.sendMessage({ ocr_error: 'OCR failed.' });
-      }
-    })();
-
-    // MUST return true to indicate we will send an asynchronous response
-    return true;
   }
 });
+

@@ -1,14 +1,11 @@
 const ocrButton = document.getElementById('ocrButton');
 const statusDiv = document.getElementById('status');
 
-// Listen for the button click
 ocrButton.addEventListener('click', () => {
   statusDiv.textContent = 'Capturing frame...';
   ocrButton.disabled = true;
 
-  // Get the active tab (must be YouTube)
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    // Inject and run the content script
     chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
       files: ['content_script.js']
@@ -16,10 +13,9 @@ ocrButton.addEventListener('click', () => {
   });
 });
 
-// Listen for messages from other scripts (background.js)
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+// Listen for messages forwarded from the background script
+chrome.runtime.onMessage.addListener((request) => {
   if (request.ocr_progress) {
-    // Show real-time progress from Tesseract.js
     let statusText = request.ocr_progress.status;
     if (request.ocr_progress.progress) {
       const progress = (request.ocr_progress.progress * 100).toFixed(0);
@@ -29,10 +25,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.ocr_result) {
-    // Got the final text!
     const text = request.ocr_result.text;
     
-    // Copy text to clipboard
     navigator.clipboard.writeText(text)
       .then(() => {
         statusDiv.textContent = 'Copied to clipboard!';
@@ -46,8 +40,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.ocr_error) {
-    // Handle any errors
     statusDiv.textContent = request.ocr_error;
     ocrButton.disabled = false;
   }
 });
+

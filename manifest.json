@@ -5,7 +5,8 @@
   "description": "Uses Tesseract.js to OCR text from a YouTube video frame.",
   "permissions": [
     "scripting",
-    "clipboardWrite"
+    "clipboardWrite",
+    "offscreen"
   ],
   "host_permissions": [
     "*://*.youtube.com/*"
@@ -30,3 +31,4 @@
     }
   ]
 }
+
