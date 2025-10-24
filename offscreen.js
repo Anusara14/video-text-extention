@@ -12,36 +12,31 @@ async function initializeWorker() {
   // Note: Tesseract.js is already loaded via the <script> tag
   
   try {
-    // Get paths. These are relative to this HTML file.
+    // Get paths to locally bundled files using chrome.runtime.getURL()
     const workerPath = chrome.runtime.getURL('lib/worker.min.js');
     const corePath = chrome.runtime.getURL('lib/tesseract-core.wasm.js');
     const langPath = chrome.runtime.getURL('lib/');
 
-    // *** FIX ***
-    // Globally override the default paths *before* creating the worker.
-    // This tells the worker script (worker.min.js) where to find its
-    // core file (tesseract-core.wasm.js) locally instead of fetching from a CDN.
-    Tesseract.workerOptions.workerPath = workerPath;
-    Tesseract.workerOptions.corePath = corePath;
+    console.log('Worker paths:', { workerPath, corePath, langPath });
     
-    // Create the Tesseract worker
-    worker = Tesseract.createWorker({
-      // Pass paths again for robustness
-      workerPath,
-      corePath,
-      langPath,
-      logger: m => sendMessage('ocr_progress', m), // Send progress
+    // *** CRITICAL FIX ***
+    // In Tesseract.js v5.x, createWorker() returns a PROMISE, not the worker object.
+    // We must AWAIT it to get the actual worker instance.
+    worker = await Tesseract.createWorker('eng', 1, {
+      workerPath: workerPath,
+      corePath: corePath,
+      langPath: langPath,
+      logger: m => {
+        console.log('Tesseract progress:', m);
+        sendMessage('ocr_progress', m);
+      }
     });
-    
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
     
     console.log('Tesseract Worker Initialized (Offscreen).');
     sendMessage('ocr_progress', { status: 'Ready to capture' });
   } catch (e) {
     console.error('Error initializing Tesseract worker', e);
-    sendMessage('ocr_error', 'Failed to load OCR model.');
+    sendMessage('ocr_error', 'Failed to load OCR model: ' + e.message);
   }
 }
 
@@ -61,7 +56,7 @@ chrome.runtime.onMessage.addListener((request) => {
         sendMessage('ocr_result', { text });
       } catch (e) {
         console.error('Error during recognition', e);
-        sendMessage('ocr_error', 'OCR failed.');
+        sendMessage('ocr_error', 'OCR failed: ' + e.message);
       }
     })();
   }

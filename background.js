@@ -41,7 +41,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type) {
     if (request.type === 'ocr_progress' || request.type === 'ocr_result' || request.type === 'ocr_error') {
       // Forward these messages to the popup
-      chrome.runtime.sendMessage(request.payload)
+      // The payload should be wrapped in the appropriate key
+      const forwardMessage = {};
+      if (request.type === 'ocr_progress') {
+        forwardMessage.ocr_progress = request.payload;
+      } else if (request.type === 'ocr_result') {
+        forwardMessage.ocr_result = request.payload;
+      } else if (request.type === 'ocr_error') {
+        forwardMessage.ocr_error = request.payload;
+      }
+      chrome.runtime.sendMessage(forwardMessage)
         .catch(e => console.log('Popup not open, skipping message.'));
     }
   }
