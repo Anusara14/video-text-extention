@@ -36,10 +36,17 @@
       // Alpha channel (data[i + 3]) remains unchanged (255)
     }
 
-    // 5. Send the *processed* image data to the background script
-    // We send the 'imageData' object directly, which is faster than
-    // creating a Base64/PNG string.
-    chrome.runtime.sendMessage({ image: imageData });
+    // 5. Put the processed image data back on the canvas
+    ctx.putImageData(imageData, 0, 0);
+    
+    // 6. Convert canvas to data URL (base64 PNG)
+    // This format is guaranteed to work with Tesseract and Chrome messaging
+    const dataURL = canvas.toDataURL('image/png');
+    
+    console.log('Captured frame, data URL length:', dataURL.length);
+    
+    // 7. Send the data URL to the background script
+    chrome.runtime.sendMessage({ image: dataURL });
 
   } catch (e) {
     console.error('Error capturing frame:', e);
