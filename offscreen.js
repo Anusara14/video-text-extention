@@ -8,14 +8,19 @@ function sendMessage(type, payload) {
 }
 
 // Initialize
-console.log('Offscreen document loaded, using OCR.space API');
+console.log('=== OFFSCREEN DOCUMENT LOADED ===');
+console.log('Using OCR.space API');
+console.log('API Key:', OCR_API_KEY.substring(0, 8) + '...');
 sendMessage('ocr_progress', { status: 'Ready to capture' });
 
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((request) => {
+  console.log('=== OFFSCREEN RECEIVED MESSAGE ===', request);
+  
   if (request.type === 'start_ocr') {
     console.log('Starting OCR with OCR.space API...');
     console.log('Image data type:', typeof request.payload);
+    console.log('Image data starts with:', request.payload ? request.payload.substring(0, 50) : 'NULL');
     
     sendMessage('ocr_progress', { status: 'Uploading image to OCR service...' });
     
