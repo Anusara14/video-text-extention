@@ -10,8 +10,7 @@
     "storage"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "https://api.ocr.space/*"
+    "<all_urls>"
   ],
   "icons": {
     "16": "logo/video-text.png",

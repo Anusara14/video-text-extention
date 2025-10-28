@@ -36,11 +36,12 @@ captureBtn.addEventListener('click', () => {
       return;
     }
     
+    // Inject into all frames to support iframes (like Vimeo)
     chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
+      target: { tabId: tabs[0].id, allFrames: true },
       files: ['content_script.js']
     }).catch(err => {
-      showError('Failed to capture. Make sure you\'re on a YouTube page.');
+      showError('Failed to capture. Make sure you\'re on a page with a video.');
       console.error(err);
     });
   });

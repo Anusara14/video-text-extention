@@ -45,14 +45,20 @@ chrome.runtime.onMessage.addListener((request) => {
         console.log('Sending request to OCR.space API...');
         sendMessage('ocr_progress', { status: 'Processing image...' });
         
+        // Add timeout to the fetch request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
         const response = await fetch('https://api.ocr.space/parse/image', {
           method: 'POST',
           headers: {
             'apikey': OCR_API_KEY
           },
-          body: formData
+          body: formData,
+          signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
         console.log('Received response from OCR.space, status:', response.status);
         
         if (!response.ok) {
@@ -87,7 +93,18 @@ chrome.runtime.onMessage.addListener((request) => {
       } catch (e) {
         console.error('Error during OCR recognition:', e);
         console.error('Error details:', e.message);
-        sendMessage('ocr_error', 'OCR failed: ' + e.message);
+        
+        // Better error messages
+        let errorMsg = 'OCR failed: ';
+        if (e.name === 'AbortError') {
+          errorMsg += 'Request timed out. Please try again.';
+        } else if (e.message.includes('E101')) {
+          errorMsg += 'OCR service is busy. Please wait a moment and try again.';
+        } else {
+          errorMsg += e.message;
+        }
+        
+        sendMessage('ocr_error', errorMsg);
       }
     })();
   }

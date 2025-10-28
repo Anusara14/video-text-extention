@@ -1,19 +1,83 @@
 (function() {
+  // Prevent multiple executions in the same frame
+  if (window.__videoOcrExecuted) {
+    console.log('Script already executed in this frame, skipping...');
+    return;
+  }
+  window.__videoOcrExecuted = true;
+  
   try {
-    const video = document.querySelector('video');
+    // Try to find video element - check multiple locations
+    let video = document.querySelector('video');
+    
+    // If not found, check in iframes (for Vimeo and other embedded players)
     if (!video) {
-      chrome.runtime.sendMessage({ ocr_error: "No video found on page." });
+      const iframes = document.querySelectorAll('iframe');
+      for (const iframe of iframes) {
+        try {
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+          video = iframeDoc.querySelector('video');
+          if (video) {
+            console.log('Found video in iframe');
+            break;
+          }
+        } catch (e) {
+          // Cross-origin iframe, skip it
+          console.log('Skipping cross-origin iframe');
+        }
+      }
+    }
+    
+    // Check shadow DOM (some video players use this)
+    if (!video) {
+      const shadowHosts = document.querySelectorAll('*');
+      for (const host of shadowHosts) {
+        if (host.shadowRoot) {
+          video = host.shadowRoot.querySelector('video');
+          if (video) {
+            console.log('Found video in shadow DOM');
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!video) {
+      chrome.runtime.sendMessage({ ocr_error: "No video found on page. Make sure the video is playing or paused." });
+      return;
+    }
+    
+    // Check if video has valid dimensions
+    if (!video.videoWidth || !video.videoHeight) {
+      chrome.runtime.sendMessage({ ocr_error: "Video not ready. Please play the video first, then pause and try again." });
       return;
     }
 
+    console.log('Found video:', video.videoWidth, 'x', video.videoHeight);
+
     // 1. Create an off-screen canvas
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    
+    // *** OPTIMIZATION: Scale down large images to prevent API timeout ***
+    const maxWidth = 1920;
+    const maxHeight = 1080;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    
+    // Scale down if image is too large
+    if (width > maxWidth || height > maxHeight) {
+      const ratio = Math.min(maxWidth / width, maxHeight / height);
+      width = Math.floor(width * ratio);
+      height = Math.floor(height * ratio);
+      console.log(`Scaling image from ${video.videoWidth}x${video.videoHeight} to ${width}x${height}`);
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     // 2. Draw the current video frame onto the canvas
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, width, height);
 
     // 3. Get the raw image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -39,17 +103,26 @@
     // 5. Put the processed image data back on the canvas
     ctx.putImageData(imageData, 0, 0);
     
-    // 6. Convert canvas to data URL (base64 PNG)
-    // This format is guaranteed to work with Tesseract and Chrome messaging
-    const dataURL = canvas.toDataURL('image/png');
+    // 6. Convert canvas to data URL
+    // Use JPEG with 85% quality for smaller file size (faster upload)
+    const dataURL = canvas.toDataURL('image/jpeg', 0.85);
     
     console.log('Captured frame, data URL length:', dataURL.length);
+    console.log('Image dimensions:', width, 'x', height);
     
     // 7. Send the data URL to the background script
-    chrome.runtime.sendMessage({ image: dataURL });
+    chrome.runtime.sendMessage({ image: dataURL }, (response) => {
+      console.log('Frame capture sent successfully');
+    });
+    
+    // Mark as successfully captured to prevent other frames from sending
+    window.__videoOcrCaptured = true;
 
   } catch (e) {
     console.error('Error capturing frame:', e);
-    chrome.runtime.sendMessage({ ocr_error: "Failed to capture frame." });
+    // Only send error if no other frame has captured successfully
+    if (!window.__videoOcrCaptured) {
+      chrome.runtime.sendMessage({ ocr_error: "Failed to capture frame: " + e.message });
+    }
   }
 })();
